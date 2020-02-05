@@ -1,4 +1,4 @@
-package pkg
+package ctg
 
 // #include <ctgclient.h>
 import "C"
