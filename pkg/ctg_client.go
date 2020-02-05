@@ -95,6 +95,12 @@ func charArr(s string) []C.char {
 
 func (c *CTGClient) Close() error {
 	log.Println("Disconnecting...")
-	cc := c.connToken
-	return ctgError(C.CTG_closeGatewayConnection(&cc))
+	if c.connToken != nil {
+		cc := c.connToken
+		defer func() {
+			c.connToken = nil
+		}()
+		return ctgError(C.CTG_closeGatewayConnection(&cc))
+	}
+	return nil
 }
