@@ -91,13 +91,17 @@ func iterateOverCobol(v reflect.Value, cbk func(ct *cobolField, root reflect.Typ
 	for i := 0; i < t.NumField(); i++ {
 		tag := t.Field(i).Tag.Get("cobol")
 		if tag == "" || tag == "-" {
-			if v.Field(i).Kind() == reflect.Ptr || v.Field(i).Kind() == reflect.Struct {
+			knd := v.Field(i).Kind()
+			if knd == reflect.Ptr || knd == reflect.Struct || knd == reflect.Interface {
 				tb := v.Field(i)
+				if knd == reflect.Interface {
+					tb = reflect.ValueOf(tb.Interface()).Elem()
+				}
 				if err := iterateOverCobol(tb, cbk); err != nil {
 					return err
 				}
 			} else {
-				log.Printf("No tag on %s\n", t.Field(i).Name)
+				log.Printf("No tag on %s [%v]\n", t.Field(i).Name, knd)
 			}
 			continue
 		}

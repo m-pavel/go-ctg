@@ -16,14 +16,16 @@ type CTGClient struct {
 }
 
 type CTGClientParams struct {
-	Server      string
-	User        string
-	Password    string
-	Transaction string
-	Tpn         string
+	Server       string
+	User         string
+	Password     string
+	Transaction  string
+	Tpn          string
+	CommareaSize int16
+	Debug        bool
 }
 
-const commAreaSize = 32500
+const DefaultCommAreaSize = 32500 // ctgclient_eci.h
 
 func Connect(host string, port int, timeout int) (*CTGClient, error) {
 	chost := C.CString(host)
@@ -39,11 +41,16 @@ func (c *CTGClient) Call(params CTGClientParams, program string, commarea []byte
 	eciParms.eci_version = C.ECI_VERSION_2A
 	eciParms.eci_call_type = C.ECI_SYNC
 
+	commAreaSize := params.CommareaSize
+	if commAreaSize == 0 {
+		commAreaSize = DefaultCommAreaSize
+	}
+
 	creq := make([]byte, commAreaSize)
 	copy(creq, commarea)
 	sreq := C.CString(string(creq))
 	eciParms.eci_commarea = unsafe.Pointer(sreq)
-	eciParms.eci_commarea_length = commAreaSize
+	eciParms.eci_commarea_length = C.short(commAreaSize)
 	eciParms.commarea_outbound_length = C.short(len(commarea))
 	eciParms.commarea_inbound_length = 0
 
@@ -69,17 +76,20 @@ func (c *CTGClient) Call(params CTGClientParams, program string, commarea []byte
 
 	eciParms.eci_userid_ptr = C.CString(params.User)
 	eciParms.eci_password_ptr = C.CString(params.Password)
-
-	log.Println(eciParms)
+	if params.Debug {
+		log.Println(eciParms)
+	}
 	res := C.CTG_ECI_Execute(c.connToken, &eciParms)
-	log.Println(eciParms)
-	log.Println(eciParms.eci_commarea_length)
-	log.Println(eciParms.commarea_inbound_length)
+	if params.Debug {
+		log.Println(eciParms)
+		log.Println(eciParms.eci_commarea_length)
+		log.Println(eciParms.commarea_inbound_length)
+	}
 	// TODO check for leak
 	var list []byte
 	sliceHeader := (*reflect.SliceHeader)((unsafe.Pointer(&list)))
-	sliceHeader.Cap = commAreaSize
-	sliceHeader.Len = commAreaSize
+	sliceHeader.Cap = int(commAreaSize)
+	sliceHeader.Len = int(commAreaSize)
 	sliceHeader.Data = uintptr(unsafe.Pointer(eciParms.eci_commarea))
 
 	return list, ctgErrorAbend(res, eciParms.eci_abend_code)

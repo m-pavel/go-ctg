@@ -2,6 +2,7 @@ package cobol
 
 import (
 	"fmt"
+	"log"
 	"reflect"
 	"strconv"
 )
@@ -32,11 +33,15 @@ var asciiTab = []byte{0x00, 0x01, 0x02, 0x03, 0x04,
 	0x37, 0x38, 0x39, 0x7c, 0xfb, 0xfc, 0xfd, 0xfe, 0xff}
 
 type Decoder struct {
+	Debug bool
 }
 
 func (d Decoder) Decode(cbl []byte, tov interface{}) error {
 	bi := 0
 	return iterateOverCobol(reflect.Indirect(reflect.ValueOf(tov)), func(ct *cobolField, rootType reflect.Type, rootValue reflect.Value, f reflect.StructField, v reflect.Value) error {
+		if d.Debug {
+			log.Printf("%s\n", ct.cname)
+		}
 		if !v.CanSet() {
 			return fmt.Errorf("Can't set %v", f)
 		}
@@ -104,7 +109,6 @@ func (d Decoder) Decode(cbl []byte, tov interface{}) error {
 							return err
 						}
 						sls.Index(i).Set(elem.Elem())
-						//sls = reflect.Append(sls, elem)
 						bi += esz
 					}
 				}

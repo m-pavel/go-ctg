@@ -2,6 +2,7 @@ package cobol
 
 import (
 	"fmt"
+	"log"
 	"reflect"
 )
 
@@ -31,11 +32,15 @@ var ebcTab = []byte{0x00, 0x01, 0x02, 0x03, 0x37,
 	0xf7, 0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff}
 
 type Encoder struct {
+	Debug bool
 }
 
 func (e Encoder) Encode(ic interface{}) ([]byte, error) {
 	res := make([]byte, 0)
 	err := iterateOverCobol(reflect.Indirect(reflect.ValueOf(ic)), func(ct *cobolField, root reflect.Type, rv reflect.Value, f reflect.StructField, v reflect.Value) error {
+		if e.Debug {
+			log.Printf("%s\n", ct.cname)
+		}
 		switch ct.ctype {
 		case "X":
 			ebc, err := ascToEbc(v, ct.csize)
@@ -67,7 +72,7 @@ func compToEbc(v reflect.Value, size int) []byte {
 	val := v.Uint()
 	res := make([]byte, size)
 	for i := size - 1; i >= 0; i-- {
-		bi := (size - i - 1) * 8
+		bi := uint(size-i-1) * 8
 		res[i] = byte(val & (0xff << bi) >> bi)
 	}
 	return res
