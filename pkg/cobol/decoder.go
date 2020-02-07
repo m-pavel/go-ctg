@@ -49,76 +49,64 @@ func (d Decoder) Decode(cbl []byte, tov interface{}) error {
 		if d.Debug {
 			log.Printf("%s : %v\n", ct.cname, fv)
 		}
-		tt := reflect.Indirect(reflect.ValueOf(fv)).Type()
-		if !v.Type().AssignableTo(tt) {
-			return fmt.Errorf("%s field type is not assignable to %s", f.Name, tt.Name())
-		}
-		v.Set(reflect.ValueOf(fv))
+		v.Set(fv)
+
 		bi += ct.csize
 		return nil
 	})
 }
 
-func (d Decoder) extractValue(ct *cobolField, cbl []byte, bi int, rootType reflect.Type, rootValue reflect.Value, f reflect.StructField, v reflect.Value) (interface{}, error) {
+func (d Decoder) extractValue(ct *cobolField, cbl []byte, bi int, rootType reflect.Type, rootValue reflect.Value, f reflect.StructField, v reflect.Value) (reflect.Value, error) {
 	switch ct.ctype {
 	case "X":
 		bar := make([]byte, ct.csize)
 		ebcToAsc(cbl[bi:bi+ct.csize], bar)
 		switch v.Kind() {
 		case reflect.String:
-			//v.Set(reflect.ValueOf(byteToString(bar)))
-			return byteToString(bar), nil
+			return reflect.ValueOf(byteToString(bar)), nil
 		case reflect.Ptr:
 			str := byteToString(bar)
-			//v.Set(reflect.ValueOf(&str))
-			return &str, nil
+			return reflect.ValueOf(&str), nil
 		case reflect.Uint, reflect.Uint8, reflect.Uint16:
-			//v.Set(reflect.ValueOf(bar[0]))
-			return bar[0], nil
+			return reflect.ValueOf(bar[0]), nil
 		default:
-			//tt := reflect.Indirect(reflect.ValueOf(bar)).Type()
-			//if !v.Type().AssignableTo(tt) {
-			//	return fmt.Errorf("%s field type is not assignable to %s", f.Name, tt.Name())
-			//}
-			//v.Set(reflect.ValueOf(bar))
-			return bar, nil
+			tt := reflect.Indirect(reflect.ValueOf(bar)).Type()
+			if !v.Type().AssignableTo(tt) {
+				return reflect.ValueOf(nil), fmt.Errorf("%s field type is not assignable to %s", f.Name, tt.Name())
+			}
+			return reflect.ValueOf(bar), nil
 		}
 	case "S9", "9":
 		iv, err := ebcToPic(cbl[bi : bi+ct.csize])
 		if err != nil {
-			return nil, fmt.Errorf("error parsing %s : %v", ct.cname, err)
+			return reflect.ValueOf(nil), err
 		}
-		//tt := reflect.Indirect(reflect.ValueOf(iv)).Type()
 		if v.Kind() == reflect.Ptr {
-			//v.Set(reflect.ValueOf(&iv))
-			return &iv, nil
-		} else {
-			//if !v.Type().AssignableTo(tt) {
-			//	return fmt.Errorf("%s field type is not assignable to %s", f.Name, tt.Name())
-			//}
-			//v.Set(reflect.ValueOf(iv))
-			return iv, nil
+			return reflect.ValueOf(&iv), err
 		}
+		return reflect.ValueOf(iv), err
 	case "COMP-3":
-		iv, _ := ebcComp3ToPic(cbl[bi:bi+ct.csize], ct.casize)
-		//tt := reflect.Indirect(reflect.ValueOf(iv)).Type()
-		//if !v.Type().AssignableTo(tt) {
-		//	return fmt.Errorf("%s field type is not assignable to %s", f.Name, tt.Name())
-		//}
-		//v.Set(reflect.ValueOf(iv))
-		return iv, nil
+		iv, err := ebcComp3ToPic(cbl[bi:bi+ct.csize], ct.casize)
+		if err != nil {
+			return reflect.ValueOf(nil), err
+		}
+		if v.Kind() == reflect.Ptr {
+			return reflect.ValueOf(&iv), err
+		}
+		return reflect.ValueOf(iv), err
 	case "COMP":
-		iv, _ := ebcCompToPic(cbl[bi : bi+ct.csize])
-		//tt := reflect.Indirect(reflect.ValueOf(iv)).Type()
-		//if !v.Type().AssignableTo(tt) {
-		//	return fmt.Errorf("%s field type is not assignable to %s", f.Name, tt.Name())
-		//}
-		//v.Set(reflect.ValueOf(iv))
-		return iv, nil
+		iv, err := ebcCompToPic(cbl[bi : bi+ct.csize])
+		if err != nil {
+			return reflect.ValueOf(nil), err
+		}
+		if v.Kind() == reflect.Ptr {
+			return reflect.ValueOf(&iv), err
+		}
+		return reflect.ValueOf(iv), err
 	default:
 		if f.Type.Kind() == reflect.Array || f.Type.Kind() == reflect.Slice {
 			if _, tf := rootType.FieldByName(ct.ctype); !tf {
-				return nil, fmt.Errorf("array %s size field not found %s", f.Name, ct.ctype)
+				return reflect.ValueOf(nil), fmt.Errorf("array %s size field not found %s", f.Name, ct.ctype)
 			}
 			as := rootValue.FieldByName(ct.ctype).Int()
 			selem := f.Type.Elem()
@@ -126,10 +114,10 @@ func (d Decoder) extractValue(ct *cobolField, cbl []byte, bi int, rootType refle
 			for i := 0; i < int(as); i++ {
 				elem := reflect.New(selem)
 				if esz, err := cobolSize(elem.Interface()); err != nil {
-					return nil, err
+					return reflect.ValueOf(nil), err
 				} else {
 					if err := d.Decode(cbl[bi:bi+esz], elem.Interface()); err != nil {
-						return nil, err
+						return reflect.ValueOf(nil), err
 					}
 					sls.Index(i).Set(elem.Elem())
 					bi += esz
@@ -138,7 +126,7 @@ func (d Decoder) extractValue(ct *cobolField, cbl []byte, bi int, rootType refle
 			//v.Set(sls)
 			return sls, nil
 		} else {
-			return nil, fmt.Errorf("unsupported cobol type %s", ct.ctype)
+			return reflect.ValueOf(nil), fmt.Errorf("unsupported cobol type %s", ct.ctype)
 		}
 	}
 }
