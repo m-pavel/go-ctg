@@ -39,13 +39,17 @@ func (e Encoder) Encode(ic interface{}) ([]byte, error) {
 	res := make([]byte, 0)
 	err := iterateOverCobol(reflect.Indirect(reflect.ValueOf(ic)), func(ct *cobolField, root reflect.Type, rv reflect.Value, f reflect.StructField, v reflect.Value) error {
 		if e.Debug {
-			log.Printf("%s\n", ct.cname)
+			if v.Kind() == reflect.Invalid {
+				log.Printf("%s : invalid\n", ct.cname)
+			} else {
+				log.Printf("%s : %v\n", ct.cname, v.Interface())
+			}
 		}
 		switch ct.ctype {
 		case "X":
 			ebc, err := ascToEbc(v, ct.csize)
 			if err != nil {
-				return nil
+				return fmt.Errorf("%s : %v", ct.cname, err)
 			}
 			res = append(res, ebc...)
 		case "9":

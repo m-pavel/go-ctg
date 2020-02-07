@@ -39,89 +39,109 @@ type Decoder struct {
 func (d Decoder) Decode(cbl []byte, tov interface{}) error {
 	bi := 0
 	return iterateOverCobol(reflect.Indirect(reflect.ValueOf(tov)), func(ct *cobolField, rootType reflect.Type, rootValue reflect.Value, f reflect.StructField, v reflect.Value) error {
-		if d.Debug {
-			log.Printf("%s\n", ct.cname)
-		}
 		if !v.CanSet() {
 			return fmt.Errorf("Can't set %v", f)
 		}
-		switch ct.ctype {
-		case "X":
-			bar := make([]byte, ct.csize)
-			ebcToAsc(cbl[bi:bi+ct.csize], bar)
-			switch v.Kind() {
-			case reflect.String:
-				v.Set(reflect.ValueOf(byteToString(bar)))
-			case reflect.Ptr:
-				str := byteToString(bar)
-				v.Set(reflect.ValueOf(&str))
-			case reflect.Uint, reflect.Uint8, reflect.Uint16:
-				v.Set(reflect.ValueOf(bar[0]))
-			default:
-				tt := reflect.Indirect(reflect.ValueOf(bar)).Type()
-				if !v.Type().AssignableTo(tt) {
-					return fmt.Errorf("%s field type is not assignable to %s", f.Name, tt.Name())
-				}
-				v.Set(reflect.ValueOf(bar))
-			}
-		case "S9", "9":
-			iv, err := ebcToPic(cbl[bi : bi+ct.csize])
-			if err != nil {
-				return fmt.Errorf("error parsing %s : %v", f.Name, err)
-			}
-			tt := reflect.Indirect(reflect.ValueOf(iv)).Type()
-			if v.Kind() == reflect.Ptr {
-				v.Set(reflect.ValueOf(&iv))
-			} else {
-				if !v.Type().AssignableTo(tt) {
-					return fmt.Errorf("%s field type is not assignable to %s", f.Name, tt.Name())
-				}
-				v.Set(reflect.ValueOf(iv))
-			}
-		case "COMP-3":
-			iv, _ := ebcComp3ToPic(cbl[bi:bi+ct.csize], ct.casize)
-			tt := reflect.Indirect(reflect.ValueOf(iv)).Type()
-			if !v.Type().AssignableTo(tt) {
-				return fmt.Errorf("%s field type is not assignable to %s", f.Name, tt.Name())
-			}
-			v.Set(reflect.ValueOf(iv))
-		case "COMP":
-			iv, _ := ebcCompToPic(cbl[bi : bi+ct.csize])
-			tt := reflect.Indirect(reflect.ValueOf(iv)).Type()
-			if !v.Type().AssignableTo(tt) {
-				return fmt.Errorf("%s field type is not assignable to %s", f.Name, tt.Name())
-			}
-			v.Set(reflect.ValueOf(iv))
-		default:
-			if f.Type.Kind() == reflect.Array || f.Type.Kind() == reflect.Slice {
-				if _, tf := rootType.FieldByName(ct.ctype); !tf {
-					return fmt.Errorf("array %s size field not found %s", f.Name, ct.ctype)
-				}
-				as := rootValue.FieldByName(ct.ctype).Int()
-				selem := f.Type.Elem()
-				sls := reflect.MakeSlice(reflect.SliceOf(selem), int(as), int(as))
-				for i := 0; i < int(as); i++ {
-					elem := reflect.New(selem)
-					if esz, err := cobolSize(elem.Interface()); err != nil {
-						return err
-					} else {
-						if err := d.Decode(cbl[bi:bi+esz], elem.Interface()); err != nil {
-							return err
-						}
-						sls.Index(i).Set(elem.Elem())
-						bi += esz
-					}
-				}
-				v.Set(sls)
-			} else {
-				return fmt.Errorf("unsupported cobol type %s", ct.ctype)
-			}
+		fv, err := d.extractValue(ct, cbl, bi, rootType, rootValue, f, v)
+		if err != nil {
+			return err
 		}
+		if d.Debug {
+			log.Printf("%s : %v\n", ct.cname, fv)
+		}
+		tt := reflect.Indirect(reflect.ValueOf(fv)).Type()
+		if !v.Type().AssignableTo(tt) {
+			return fmt.Errorf("%s field type is not assignable to %s", f.Name, tt.Name())
+		}
+		v.Set(reflect.ValueOf(fv))
 		bi += ct.csize
 		return nil
 	})
 }
 
+func (d Decoder) extractValue(ct *cobolField, cbl []byte, bi int, rootType reflect.Type, rootValue reflect.Value, f reflect.StructField, v reflect.Value) (interface{}, error) {
+	switch ct.ctype {
+	case "X":
+		bar := make([]byte, ct.csize)
+		ebcToAsc(cbl[bi:bi+ct.csize], bar)
+		switch v.Kind() {
+		case reflect.String:
+			//v.Set(reflect.ValueOf(byteToString(bar)))
+			return byteToString(bar), nil
+		case reflect.Ptr:
+			str := byteToString(bar)
+			//v.Set(reflect.ValueOf(&str))
+			return &str, nil
+		case reflect.Uint, reflect.Uint8, reflect.Uint16:
+			//v.Set(reflect.ValueOf(bar[0]))
+			return bar[0], nil
+		default:
+			//tt := reflect.Indirect(reflect.ValueOf(bar)).Type()
+			//if !v.Type().AssignableTo(tt) {
+			//	return fmt.Errorf("%s field type is not assignable to %s", f.Name, tt.Name())
+			//}
+			//v.Set(reflect.ValueOf(bar))
+			return bar, nil
+		}
+	case "S9", "9":
+		iv, err := ebcToPic(cbl[bi : bi+ct.csize])
+		if err != nil {
+			return nil, fmt.Errorf("error parsing %s : %v", ct.cname, err)
+		}
+		//tt := reflect.Indirect(reflect.ValueOf(iv)).Type()
+		if v.Kind() == reflect.Ptr {
+			//v.Set(reflect.ValueOf(&iv))
+			return &iv, nil
+		} else {
+			//if !v.Type().AssignableTo(tt) {
+			//	return fmt.Errorf("%s field type is not assignable to %s", f.Name, tt.Name())
+			//}
+			//v.Set(reflect.ValueOf(iv))
+			return iv, nil
+		}
+	case "COMP-3":
+		iv, _ := ebcComp3ToPic(cbl[bi:bi+ct.csize], ct.casize)
+		//tt := reflect.Indirect(reflect.ValueOf(iv)).Type()
+		//if !v.Type().AssignableTo(tt) {
+		//	return fmt.Errorf("%s field type is not assignable to %s", f.Name, tt.Name())
+		//}
+		//v.Set(reflect.ValueOf(iv))
+		return iv, nil
+	case "COMP":
+		iv, _ := ebcCompToPic(cbl[bi : bi+ct.csize])
+		//tt := reflect.Indirect(reflect.ValueOf(iv)).Type()
+		//if !v.Type().AssignableTo(tt) {
+		//	return fmt.Errorf("%s field type is not assignable to %s", f.Name, tt.Name())
+		//}
+		//v.Set(reflect.ValueOf(iv))
+		return iv, nil
+	default:
+		if f.Type.Kind() == reflect.Array || f.Type.Kind() == reflect.Slice {
+			if _, tf := rootType.FieldByName(ct.ctype); !tf {
+				return nil, fmt.Errorf("array %s size field not found %s", f.Name, ct.ctype)
+			}
+			as := rootValue.FieldByName(ct.ctype).Int()
+			selem := f.Type.Elem()
+			sls := reflect.MakeSlice(reflect.SliceOf(selem), int(as), int(as))
+			for i := 0; i < int(as); i++ {
+				elem := reflect.New(selem)
+				if esz, err := cobolSize(elem.Interface()); err != nil {
+					return nil, err
+				} else {
+					if err := d.Decode(cbl[bi:bi+esz], elem.Interface()); err != nil {
+						return nil, err
+					}
+					sls.Index(i).Set(elem.Elem())
+					bi += esz
+				}
+			}
+			//v.Set(sls)
+			return sls, nil
+		} else {
+			return nil, fmt.Errorf("unsupported cobol type %s", ct.ctype)
+		}
+	}
+}
 func byteToString(b []byte) string {
 	lc := len(b) - 1
 	for ; lc >= 0; lc-- {
