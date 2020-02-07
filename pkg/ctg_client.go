@@ -1,6 +1,6 @@
 package ctg
 
-// #cgo CFLAGS: -g -Wall -I../ctg-api/include -DCICS_LNX
+// #cgo CFLAGS: -g -Wall -I../ctg-api/include -DCICS_LNX -D__64BIT__
 // #include <ctgclient.h>
 // #include <ctgclient_eci.h>
 import "C"
