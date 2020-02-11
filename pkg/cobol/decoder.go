@@ -40,7 +40,7 @@ func (d Decoder) Decode(cbl []byte, tov interface{}) error {
 	bi := 0
 	return iterateOverCobol(reflect.Indirect(reflect.ValueOf(tov)), func(ct *cobolField, rootType reflect.Type, rootValue reflect.Value, f reflect.StructField, v reflect.Value) error {
 		if !v.CanSet() {
-			return fmt.Errorf("Can't set %v", f)
+			return fmt.Errorf("can't set %v", f)
 		}
 		fv, err := d.extractValue(ct, cbl, bi, rootType, rootValue, f, v)
 		if err != nil {
@@ -79,30 +79,30 @@ func (d Decoder) extractValue(ct *cobolField, cbl []byte, bi int, rootType refle
 	case "S9", "9":
 		iv, err := ebcToPic(cbl[bi : bi+ct.csize])
 		if err != nil {
-			return reflect.ValueOf(nil), err
+			return reflect.ValueOf(nil), fldErr(ct, err)
 		}
 		if v.Kind() == reflect.Ptr {
-			return reflect.ValueOf(&iv), err
+			return reflect.ValueOf(&iv), nil
 		}
-		return reflect.ValueOf(iv), err
+		return reflect.ValueOf(iv), nil
 	case "COMP-3":
 		iv, err := ebcComp3ToPic(cbl[bi:bi+ct.csize], ct.casize)
 		if err != nil {
-			return reflect.ValueOf(nil), err
+			return reflect.ValueOf(nil), fldErr(ct, err)
 		}
 		if v.Kind() == reflect.Ptr {
-			return reflect.ValueOf(&iv), err
+			return reflect.ValueOf(&iv), nil
 		}
-		return reflect.ValueOf(iv), err
+		return reflect.ValueOf(iv), nil
 	case "COMP":
 		iv, err := ebcCompToPic(cbl[bi : bi+ct.csize])
 		if err != nil {
-			return reflect.ValueOf(nil), err
+			return reflect.ValueOf(nil), fldErr(ct, err)
 		}
 		if v.Kind() == reflect.Ptr {
-			return reflect.ValueOf(&iv), err
+			return reflect.ValueOf(&iv), nil
 		}
-		return reflect.ValueOf(iv), err
+		return reflect.ValueOf(iv), nil
 	default:
 		if f.Type.Kind() == reflect.Array || f.Type.Kind() == reflect.Slice {
 			if _, tf := rootType.FieldByName(ct.ctype); !tf {
@@ -117,19 +117,26 @@ func (d Decoder) extractValue(ct *cobolField, cbl []byte, bi int, rootType refle
 					return reflect.ValueOf(nil), err
 				} else {
 					if err := d.Decode(cbl[bi:bi+esz], elem.Interface()); err != nil {
-						return reflect.ValueOf(nil), err
+						return reflect.ValueOf(nil), fldErr(ct, err)
 					}
 					sls.Index(i).Set(elem.Elem())
 					bi += esz
 				}
 			}
-			//v.Set(sls)
 			return sls, nil
 		} else {
 			return reflect.ValueOf(nil), fmt.Errorf("unsupported cobol type %s", ct.ctype)
 		}
 	}
 }
+
+func fldErr(ct *cobolField, e error) error {
+	if e == nil {
+		return nil
+	}
+	return fmt.Errorf("error decoding `%s` %v", ct.cname, e)
+}
+
 func byteToString(b []byte) string {
 	lc := len(b) - 1
 	for ; lc >= 0; lc-- {
