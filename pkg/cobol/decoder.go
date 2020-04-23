@@ -60,10 +60,14 @@ func (d Decoder) extractValue(ct *cobolField, cbl []byte, bi int, rootType refle
 	switch ct.ctype {
 	case "X":
 		bar := make([]byte, ct.csize)
-		ebcToAsc(cbl[bi:bi+ct.csize], bar)
+		sz := ebcToAsc(cbl[bi:bi+ct.csize], bar)
 		switch v.Kind() {
 		case reflect.String:
-			return reflect.ValueOf(byteToString(bar)), nil
+			if sz == -1 {
+				return reflect.ValueOf(""), nil
+			} else {
+				return reflect.ValueOf(byteToString(bar)), nil
+			}
 		case reflect.Ptr:
 			str := byteToString(bar)
 			return reflect.ValueOf(&str), nil
@@ -147,8 +151,8 @@ func byteToString(b []byte) string {
 	return string(b[:lc+1])
 }
 
-func ebcToAsc(ebc []byte, ascii []byte) {
-	//low := true
+func ebcToAsc(ebc []byte, ascii []byte) int {
+	size := len(ascii)
 	space := true
 	for i := len(ebc) - 1; i >= 0; i-- {
 		ebcByte := ebc[i] & 0xff
@@ -157,15 +161,14 @@ func ebcToAsc(ebc []byte, ascii []byte) {
 		} else {
 			ascii[i] = asciiTab[ebcByte]
 		}
-		//if ascii[i] != 0x00 {
-		//	low = false
-		//}
 		if (ascii[i] == 0x00 || ascii[i] == 0x20) && space {
 			ascii[i] = 0x00
+			size--
 		} else {
 			space = false
 		}
 	}
+	return size
 }
 
 func ebcToPic(ebc []byte) (int, error) {
