@@ -33,7 +33,8 @@ var asciiTab = []byte{0x00, 0x01, 0x02, 0x03, 0x04,
 	0x37, 0x38, 0x39, 0x7c, 0xfb, 0xfc, 0xfd, 0xfe, 0xff}
 
 type Decoder struct {
-	Debug bool
+	Debug       bool
+	FailOnError bool
 }
 
 func (d Decoder) Decode(cbl []byte, tov interface{}) error {
@@ -83,7 +84,11 @@ func (d Decoder) extractValue(ct *cobolField, cbl []byte, bi int, rootType refle
 	case "S9", "9":
 		iv, err := ebcToPic(cbl[bi : bi+ct.csize])
 		if err != nil {
-			return reflect.ValueOf(nil), fldErr(ct, err)
+			if d.FailOnError {
+				return reflect.ValueOf(nil), fldErr(ct, err)
+			} else {
+				log.Println(fldErr(ct, err))
+			}
 		}
 		if v.Kind() == reflect.Ptr {
 			return reflect.ValueOf(&iv), nil
@@ -92,7 +97,11 @@ func (d Decoder) extractValue(ct *cobolField, cbl []byte, bi int, rootType refle
 	case "COMP-3":
 		iv, err := ebcComp3ToPic(cbl[bi:bi+ct.csize], ct.casize)
 		if err != nil {
-			return reflect.ValueOf(nil), fldErr(ct, err)
+			if d.FailOnError {
+				return reflect.ValueOf(nil), fldErr(ct, err)
+			} else {
+				log.Println(fldErr(ct, err))
+			}
 		}
 		if v.Kind() == reflect.Ptr {
 			return reflect.ValueOf(&iv), nil
@@ -101,7 +110,11 @@ func (d Decoder) extractValue(ct *cobolField, cbl []byte, bi int, rootType refle
 	case "COMP":
 		iv, err := ebcCompToPic(cbl[bi : bi+ct.csize])
 		if err != nil {
-			return reflect.ValueOf(nil), fldErr(ct, err)
+			if d.FailOnError {
+				return reflect.ValueOf(nil), fldErr(ct, err)
+			} else {
+				log.Println(fldErr(ct, err))
+			}
 		}
 		if v.Kind() == reflect.Ptr {
 			return reflect.ValueOf(&iv), nil
