@@ -50,6 +50,9 @@ func (d Decoder) Decode(cbl []byte, tov interface{}) error {
 		if d.Debug {
 			log.Printf("%s : %v\n", ct.cname, fv)
 		}
+		if !v.Type().AssignableTo(fv.Type()) {
+			return fmt.Errorf("field %s type (%s) is not assignable to %s", ct.cname, v.Type().Name(), fv.Type().Name())
+		}
 		v.Set(fv)
 
 		bi += ct.csize
